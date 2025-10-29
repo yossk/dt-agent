@@ -10,11 +10,13 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 import yaml
+import re
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.email_intake.parser import EmailParser
+from src.email_intake.content_extractor import EmailContentExtractor, EmailContext
 from src.document_processor.excel_parser import ExcelParser
 from src.document_processor.pdf_parser import PDFParser
 from src.document_processor.unifier import DataUnifier
@@ -45,6 +47,7 @@ class QuoteProcessor:
         
         # Initialize modules
         self.email_parser = EmailParser()
+        self.content_extractor = EmailContentExtractor()
         self.excel_parser = ExcelParser()
         self.pdf_parser = PDFParser(use_ocr=self.config.get('processing', {}).get('ocr_enabled', True))
         self.data_unifier = DataUnifier()
@@ -73,11 +76,20 @@ class QuoteProcessor:
             metadata = self.email_parser.parse_msg_file(email_path)
             logger.info(f"Parsed email from: {metadata.from_address}")
             
+            # Step 1.5: Extract structured email context for agent understanding
+            email_context = self.content_extractor.extract_context(metadata)
+            logger.info(f"Extracted email context: {len(email_context.product_descriptions)} product descriptions, "
+                       f"{len(email_context.special_notes)} notes, {len(email_context.customer_mentions)} customer mentions")
+            
+            # Log structured context for debugging/agent use
+            context_string = self.content_extractor.to_structured_string(email_context)
+            logger.debug(f"Email context:\n{context_string}")
+            
             # Extract customer/product names if not provided
             if not customer_name:
-                customer_name = self._extract_customer_name(metadata)
+                customer_name = self._extract_customer_name(metadata, email_context)
             if not product_name:
-                product_name = self._extract_product_name(metadata)
+                product_name = self._extract_product_name(metadata, email_context)
             
             # Step 2: Extract attachments
             temp_dir = os.path.join(os.path.dirname(email_path), 'temp_attachments')
@@ -169,12 +181,21 @@ class QuoteProcessor:
             for pdf_file in pdf_files:
                 self.file_organizer.save_vendor_quote(pdf_file.filepath, dest_folder, "pdf")
             
-            # Save extracted data
+            # Save extracted data including email context
             extracted_data = {
                 "email_metadata": {
                     "from": metadata.from_address,
                     "subject": metadata.subject,
-                    "date": metadata.date.isoformat()
+                    "date": metadata.date.isoformat(),
+                    "language": email_context.language
+                },
+                "email_context": {
+                    "customer_mentions": email_context.customer_mentions,
+                    "product_descriptions": email_context.product_descriptions,
+                    "special_notes": email_context.special_notes,
+                    "specifications": email_context.specifications,
+                    "quantities_mentioned": email_context.quantities_mentioned,
+                    "structured_context": context_string
                 },
                 "products": [
                     {
@@ -228,10 +249,18 @@ class QuoteProcessor:
                 "error": str(e)
             }
     
-    def _extract_customer_name(self, metadata) -> str:
+    def _extract_customer_name(self, metadata, email_context: Optional[EmailContext] = None) -> str:
         """Extract customer name from email"""
+        # First try email context customer mentions
+        if email_context and email_context.customer_mentions:
+            # Prefer longer, more specific mentions
+            mentions = sorted(email_context.customer_mentions, key=len, reverse=True)
+            for mention in mentions[:3]:
+                # Filter out email addresses, keep names
+                if '@' not in mention and len(mention.split()) <= 3:
+                    return mention.title()
+        
         # Try to extract from subject or body
-        # For now, use a simple heuristic - can be enhanced with LLM
         subject = metadata.subject.lower()
         
         # Common patterns: "RE: Quote for [Customer]", "DDN for [Customer]"
@@ -241,11 +270,26 @@ class QuoteProcessor:
                 name = parts[-1].strip().split()[0]
                 return name.capitalize()
         
+        # Try from sender domain
+        if '@' in metadata.from_address:
+            domain = metadata.from_address.split('@')[1].split('.')[0]
+            return domain.capitalize()
+        
         # Default
         return "Customer"
     
-    def _extract_product_name(self, metadata) -> str:
+    def _extract_product_name(self, metadata, email_context: Optional[EmailContext] = None) -> str:
         """Extract product/project name from email"""
+        # Try from email context product descriptions
+        if email_context and email_context.product_descriptions:
+            # Look for server/product type mentions
+            for desc in email_context.product_descriptions[:3]:
+                if 'server' in desc.lower():
+                    # Extract server type
+                    server_match = re.search(r'(\d+U?\s+server)', desc, re.IGNORECASE)
+                    if server_match:
+                        return server_match.group(1)
+        
         subject = metadata.subject
         
         # Remove common prefixes
