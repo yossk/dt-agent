@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  dt-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dt-agent:local
+    container_name: dt-agent-local
+    volumes:
+      # Mount source code for development (overrides container code)
+      - ./src:/app/src:ro
+      - ./config:/app/config:rw
+      # Data directories
+      - ./data/quotes:/data/quotes:rw
+      - ./data/logs:/data/logs:rw
+      - ./data/incoming:/data/incoming:rw
+      # Example data for testing
+      - ./example-data:/app/example-data:ro
+    environment:
+      - PYTHONPATH=/app
+      - CONFIG_PATH=/app/config/config.yaml
+      - LOG_LEVEL=INFO
+    working_dir: /app
+    entrypoint: ["python", "src/main.py"]
+    command: []
+    # Keep container running for interactive use
+    stdin_open: true
+    tty: true
+
+  # Optional: Add Elasticsearch for product catalog (when ready)
+  # elasticsearch:
+  #   image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+  #   container_name: dt-agent-elasticsearch
+  #   environment:
+  #     - discovery.type=single-node
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+  #   ports:
+  #     - "9200:9200"
+  #   volumes:
+  #     - elasticsearch-data:/usr/share/elasticsearch/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+
+volumes:
+  # elasticsearch-data:
+

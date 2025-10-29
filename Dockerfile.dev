@@ -1,0 +1,38 @@
+# Development Dockerfile with uv support
+FROM python:3.11-slim
+
+# Install system dependencies including uv
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    tesseract-ocr \
+    tesseract-ocr-heb \
+    poppler-utils \
+    libpoppler-cpp-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+# Set working directory
+WORKDIR /app
+
+# Copy uv configuration
+COPY pyproject.toml ./
+
+# Install dependencies with uv
+RUN uv pip install --system -e ".[dev]"
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /data/quotes /data/logs /data/incoming
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV CONFIG_PATH=/app/config/config.yaml
+
+# Default command
+CMD ["python", "src/main.py", "--help"]
+

@@ -12,6 +12,10 @@ ENV/
 dist/
 build/
 
+# uv
+.uv/
+uv.lock
+
 # IDEs
 .vscode/
 .idea/
@@ -26,6 +30,7 @@ config/config.yaml
 
 # Data
 /data/
+data/
 example-data/temp_attachments/
 
 # Logs

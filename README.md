@@ -42,21 +42,51 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation a
    cd dt-agent
    ```
 
-2. **Install dependencies**:
+2. **Choose your setup method**:
+
+   **Option A: Local Development with uv (Recommended)**
+   ```bash
+   # Install uv (if not installed)
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   
+   # Initialize project
+   make init
+   # or manually:
+   make setup-config && make setup-dev
+   ```
+
+   **Option B: Traditional pip**
    ```bash
    pip install -r requirements.txt
+   make setup-config
+   ```
+
+   **Option C: Docker (No local setup needed)**
+   ```bash
+   # Just run in Docker - no local Python needed
+   make docker-test
    ```
 
 3. **Configure the system**:
    ```bash
-   cp config/config.yaml.example config/config.yaml
+   make setup-config
    # Edit config/config.yaml with your settings
    ```
 
 4. **Run a test**:
    ```bash
-   python src/main.py example-data/"RE_ quote for server.msg" --config config/config.yaml
+   # Local with uv
+   ./scripts/test-local.sh
+   # or with make
+   make test-example
+   
+   # Docker
+   ./scripts/test-docker.sh
+   # or
+   make docker-test
    ```
+
+   See [TESTING.md](TESTING.md) for detailed testing instructions.
 
 ### Docker Deployment
 

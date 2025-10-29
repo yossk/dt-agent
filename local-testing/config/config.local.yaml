@@ -1,0 +1,85 @@
+# DT-Agent Local Testing Configuration
+# This config is optimized for local development and testing
+
+paths:
+  base: "./data/quotes"  # Relative to local-testing directory
+  structure: "{customer}/{quotes}/{year}/{product}/{costs}"
+  templates: "../templates"
+
+# Pricing configuration - using simpler rules for testing
+pricing:
+  default_margin_percent: 15.0
+  margin_rules:
+    - category: "servers"
+      margin: 12.0
+    - category: "storage"
+      margin: 15.0
+    - category: "networking"
+      margin: 18.0
+    - category: "software"
+      margin: 25.0
+    - category: "firewalls"
+      margin: 20.0
+    - category: "gpus"
+      margin: 12.0
+    - category: "wifi"
+      margin: 18.0
+
+# Email configuration
+email:
+  watch_folder: "./data/incoming"
+  response_enabled: false  # Disable email responses for local testing
+  response_template: "../templates/email_response.html"
+  response_from: "test@localhost"
+
+# LLM/MCP configuration (optional for local testing)
+llm:
+  mcp_server_url: "http://localhost:8080"  # Local MCP server if running
+  model: "gpt-4"
+  max_retries: 3
+  timeout: 30
+  temperature: 0.1
+
+# Elasticsearch configuration (optional - disable for local testing)
+elasticsearch:
+  enabled: false  # Disable ES for local testing unless you have it running
+  host: "localhost"
+  port: 9200
+  index_name: "products"
+  verify_certs: false
+
+# Languages
+languages:
+  supported: ["he", "en"]
+  default: "en"
+  auto_detect: true
+
+# Logging - verbose for testing
+logging:
+  level: "DEBUG"  # Use DEBUG for local testing
+  file: "./logs/dt-agent.log"
+  max_size_mb: 10
+  backup_count: 5
+
+# Processing options - relaxed for testing
+processing:
+  max_file_size_mb: 100
+  allowed_extensions: [".xlsx", ".xls", ".pdf", ".msg"]
+  
+  # OCR settings
+  ocr_enabled: true
+  ocr_languages: ["eng", "heb"]
+  
+  # Validation
+  strict_validation: false  # Don't fail on validation errors in testing
+  auto_correct_quantities: true
+  
+  # Deduplication
+  auto_deduplicate: true
+  similarity_threshold: 0.85
+
+# Company information
+company:
+  name: "Dayo Tech (Test)"
+  email: "test@dayo-tech.com"
+
