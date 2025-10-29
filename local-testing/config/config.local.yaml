@@ -83,3 +83,8 @@ company:
   name: "Dayo Tech (Test)"
   email: "test@dayo-tech.com"
 
+# Quote configuration
+quote:
+  currency: "USD"
+  use_project_format: true  # Use project format with vendor sheets + proposal sheet
+

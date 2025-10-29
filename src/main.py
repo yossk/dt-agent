@@ -210,13 +210,29 @@ class QuoteProcessor:
             quote_id = f"{customer_name}_{product_name}_{metadata.date.strftime('%Y%m%d')}"
             temp_quote_path = os.path.join(temp_dir, f"quote_{quote_id}.xlsx")
             
-            self.quote_generator.generate_quote(
-                priced_products=priced_products,
-                summary=summary,
-                output_path=temp_quote_path,
-                customer_name=customer_name,
-                quote_number=quote_id
-            )
+            # Check if project quote format should be used
+            use_project_format = self.config.get('quote', {}).get('use_project_format', False)
+            
+            if use_project_format:
+                # Extract vendor information from products for grouping
+                vendor_grouping = self._extract_vendor_grouping(priced_products, metadata, email_context)
+                
+                self.quote_generator.generate_project_quote(
+                    priced_products=priced_products,
+                    summary=summary,
+                    output_path=temp_quote_path,
+                    customer_name=customer_name,
+                    quote_number=quote_id,
+                    vendor_grouping=vendor_grouping
+                )
+            else:
+                self.quote_generator.generate_quote(
+                    priced_products=priced_products,
+                    summary=summary,
+                    output_path=temp_quote_path,
+                    customer_name=customer_name,
+                    quote_number=quote_id
+                )
             
             # Step 7: Organize files
             dest_folder = self.file_organizer.build_path(customer_name, product_name)
@@ -347,6 +363,46 @@ class QuoteProcessor:
         
         # Use subject as product name (or part of it)
         return subject[:50] or "Project"
+    
+    def _extract_vendor_grouping(self, priced_products, metadata, email_context) -> Dict[str, List]:
+        """
+        Extract vendor grouping for project quote format
+        Groups products by vendor (from email sender or product source)
+        """
+        from src.business_logic.pricing import PricedProduct
+        
+        vendor_grouping = {}
+        
+        # Extract vendor from email sender
+        vendor_from_email = None
+        if metadata and '@' in metadata.from_address:
+            domain = metadata.from_address.split('@')[1].split('.')[0]
+            # Map common domains to vendor names
+            vendor_mapping = {
+                'ddn': 'DDN',
+                'nvidia': 'Nvidia Networking',
+                'dell': 'Dell',
+                'hp': 'HPE',
+                'fortinet': 'FortiNet',
+                'apc': 'APC'
+            }
+            vendor_from_email = vendor_mapping.get(domain.lower(), domain.upper())
+        
+        for product in priced_products:
+            # Try to get vendor from product metadata
+            vendor = None
+            if product.raw_product:
+                vendor = product.raw_product.metadata.get('vendor')
+            
+            # Use vendor from email or category
+            if not vendor:
+                vendor = vendor_from_email or product.category or "General"
+            
+            if vendor not in vendor_grouping:
+                vendor_grouping[vendor] = []
+            vendor_grouping[vendor].append(product)
+        
+        return vendor_grouping
     
     def _parse_inline_tables(self, tables) -> list:
         """Parse inline tables into product format"""

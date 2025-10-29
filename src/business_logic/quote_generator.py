@@ -317,4 +317,256 @@ Contact:
             # Set column width (with some limits)
             adjusted_width = min(max_length + 2, 50)
             ws.column_dimensions[column_letter].width = adjusted_width
+    
+    def generate_project_quote(self,
+                              priced_products: List[PricedProduct],
+                              summary: QuoteSummary,
+                              output_path: str,
+                              customer_name: Optional[str] = None,
+                              quote_number: Optional[str] = None,
+                              vendor_grouping: Optional[Dict[str, List[PricedProduct]]] = None,
+                              currency: str = "USD") -> str:
+        """
+        Generate project-style quote with vendor sheets and proposal sheet
+        (Based on project example.xlsx structure)
+        
+        Args:
+            priced_products: List of PricedProduct objects
+            summary: QuoteSummary object
+            output_path: Path to save quote file
+            customer_name: Customer name
+            quote_number: Quote number/ID
+            vendor_grouping: Dict mapping vendor/category names to products
+            currency: Currency symbol/code
+            
+        Returns:
+            Path to generated quote file
+        """
+        if Workbook is None:
+            raise ImportError("openpyxl is required for quote generation")
+        
+        wb = Workbook()
+        wb.remove(wb.active)  # Remove default sheet
+        
+        # Group products by vendor/category if not provided
+        if vendor_grouping is None:
+            vendor_grouping = self._group_products_by_vendor(priced_products)
+        
+        # Create vendor sheets
+        vendor_sheets = {}
+        for vendor_name, products in vendor_grouping.items():
+            sheet_name = self._sanitize_sheet_name(vendor_name)
+            ws = self._create_vendor_sheet(wb, sheet_name, products, currency)
+            vendor_sheets[vendor_name] = ws
+        
+        # Create proposal sheet (consolidates all products)
+        proposal_sheet = self._create_proposal_sheet(wb, priced_products, customer_name, quote_number, currency)
+        
+        # Save workbook
+        os.makedirs(os.path.dirname(output_path), exist_ok=True) if os.path.dirname(output_path) else None
+        wb.save(output_path)
+        
+        logger.info(f"Generated project quote with {len(vendor_grouping)} vendor sheets saved to {output_path}")
+        return output_path
+    
+    def _group_products_by_vendor(self, products: List[PricedProduct]) -> Dict[str, List[PricedProduct]]:
+        """
+        Group products by vendor/category
+        
+        For now, groups by product category or source metadata
+        Can be enhanced with vendor detection logic
+        """
+        grouping = {}
+        
+        for product in products:
+            # Try to get vendor/category from metadata
+            vendor = None
+            if product.raw_product:
+                vendor = product.raw_product.metadata.get('vendor') or product.raw_product.metadata.get('category')
+            
+            # Use category or default
+            if not vendor:
+                vendor = product.category or "General"
+            
+            if vendor not in grouping:
+                grouping[vendor] = []
+            grouping[vendor].append(product)
+        
+        return grouping
+    
+    def _sanitize_sheet_name(self, name: str, max_length: int = 31) -> str:
+        """Sanitize sheet name for Excel (max 31 chars, no special chars)"""
+        # Remove invalid chars: / \ ? * [ ]
+        invalid_chars = ['/', '\\', '?', '*', '[', ']']
+        sanitized = name
+        for char in invalid_chars:
+            sanitized = sanitized.replace(char, '_')
+        
+        # Truncate if needed
+        if len(sanitized) > max_length:
+            sanitized = sanitized[:max_length]
+        
+        return sanitized
+    
+    def _create_vendor_sheet(self, wb, sheet_name: str, products: List[PricedProduct], currency: str):
+        """
+        Create vendor sheet with profit/margin columns
+        Format: PRODUCT | DESCRIPTION | QTY | Price | Total price | Sale | Total Sale | mergin
+        """
+        ws = wb.create_sheet(title=sheet_name)
+        
+        # Header row
+        headers = ['PRODUCT', 'DESCRIPTION', 'QTY', 'Price', 'Total price', 'Sale', 'Total Sale', 'mergin']
+        header_row = 1
+        
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+        
+        # Product rows
+        row = header_row + 1
+        for product in products:
+            # Calculate values
+            vendor_price = product.vendor_unit_price
+            total_price = product.vendor_total if product.vendor_total else (vendor_price * product.quantity)
+            sale_unit = product.selling_unit_price
+            total_sale = product.selling_total
+            margin = product.margin_percent
+            
+            values = [
+                product.sku,
+                product.description[:200] if product.description else '',  # Truncate long descriptions
+                product.quantity,
+                vendor_price,
+                total_price,
+                sale_unit,
+                total_sale,
+                margin
+            ]
+            
+            for col, value in enumerate(values, 1):
+                cell = ws.cell(row=row, column=col)
+                cell.value = value
+                
+                # Format numbers
+                if isinstance(value, (int, float)):
+                    if col in [4, 5, 6, 7]:  # Price columns
+                        cell.number_format = '#,##0.00'
+                    elif col == 8:  # Margin
+                        cell.number_format = '0.00%'
+                
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                cell.alignment = Alignment(vertical='top', wrap_text=True) if col == 2 else Alignment(vertical='center')
+            
+            row += 1
+        
+        # Auto-size columns
+        for col in range(1, len(headers) + 1):
+            column_letter = get_column_letter(col)
+            max_length = 0
+            for row in ws[column_letter]:
+                try:
+                    if len(str(row.value)) > max_length:
+                        max_length = len(str(row.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        return ws
+    
+    def _create_proposal_sheet(self, wb, products: List[PricedProduct], customer_name: Optional[str], quote_number: Optional[str], currency: str):
+        """
+        Create proposal sheet (consolidates all products for customer)
+        Format: Product | Description | Qty | Price | Total | Mergin | Profit %
+        """
+        ws = wb.create_sheet(title="proposal")
+        
+        # Header at row 3 (as in example)
+        header_row = 3
+        headers = ['Product', 'Description', 'Qty', 'Price', 'Total', 'Mergin', 'Profit %']
+        
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=header_row, column=col + 1)  # Start at column B (skip first column)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = border
+        
+        # Product rows
+        row = header_row + 1
+        for product in products:
+            values = [
+                product.sku,
+                product.description[:200] if product.description else '',
+                product.quantity,
+                product.selling_unit_price,  # Selling price in proposal
+                product.selling_total,
+                product.margin_amount,
+                product.margin_percent
+            ]
+            
+            for col, value in enumerate(values, 1):
+                cell = ws.cell(row=row, column=col + 1)  # Start at column B
+                cell.value = value
+                
+                # Format numbers
+                if isinstance(value, (int, float)):
+                    if col in [4, 5, 6]:  # Price/margin columns
+                        cell.number_format = '#,##0.00'
+                    elif col == 7:  # Profit %
+                        cell.number_format = '0.00%'
+                
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                cell.alignment = Alignment(vertical='top', wrap_text=True) if col == 2 else Alignment(vertical='center')
+            
+            row += 1
+        
+        # Auto-size columns
+        for col in range(2, len(headers) + 2):  # Columns B-H
+            column_letter = get_column_letter(col)
+            max_length = 0
+            for row in ws[column_letter]:
+                try:
+                    if len(str(row.value)) > max_length:
+                        max_length = len(str(row.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        return ws
 
