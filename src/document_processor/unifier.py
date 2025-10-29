@@ -86,15 +86,29 @@ class DataUnifier:
                 # Merge duplicate - combine quantities, use better data
                 existing = sku_map[sku_normalized]
                 
-                # Use higher confidence data
-                if product.confidence > existing.confidence:
-                    # Update existing with better data
-                    existing.quantity += product.quantity
-                    existing.total_price = (existing.unit_price * existing.quantity) if existing.unit_price else None
-                else:
-                    # Add quantity to existing
-                    existing.quantity += product.quantity
-                    existing.total_price = (existing.unit_price * existing.quantity) if existing.unit_price else None
+                # Preserve price - if current product has price and existing doesn't, use current
+                # Or if both have prices, prefer the one with higher confidence or the latest non-zero price
+                should_update_price = False
+                if product.unit_price > 0 and existing.unit_price == 0:
+                    should_update_price = True
+                elif product.unit_price > 0 and product.confidence >= existing.confidence:
+                    should_update_price = True
+                
+                if should_update_price:
+                    existing.unit_price = product.unit_price
+                
+                # Add quantity to existing
+                existing.quantity += product.quantity
+                
+                # Recalculate total price
+                if existing.unit_price and existing.unit_price > 0:
+                    existing.total_price = existing.unit_price * existing.quantity
+                elif product.total_price:
+                    # If we have a total price but no unit price, try to derive it
+                    total_quantity = existing.quantity
+                    if total_quantity > 0:
+                        existing.unit_price = product.total_price / total_quantity
+                        existing.total_price = product.total_price
                 
                 # Merge sources
                 if product.source not in existing.metadata.get('sources', []):
@@ -156,8 +170,8 @@ class DataUnifier:
             if product.quantity <= 0:
                 errors_for_product.append(f"Invalid quantity: {product.quantity}")
             
-            # Validate price
-            if product.unit_price <= 0:
+            # Validate price (optional - may be extracted from email or added later)
+            if product.unit_price < 0:  # Allow 0.0 (price unknown) but reject negatives
                 errors_for_product.append(f"Invalid unit price: {product.unit_price}")
             
             if errors_for_product:

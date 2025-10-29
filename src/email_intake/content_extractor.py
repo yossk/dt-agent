@@ -136,12 +136,15 @@ class EmailContentExtractor:
         descriptions = []
         
         # Look for product-like sentences
-        # Patterns: "X server with...", "Y quantity of Z", product lists
+        # Patterns: "X server with...", "Y quantity of Z", product lists, SKU patterns
         product_indicators = [
             r'\d+U?\s+server[^\n]{10,200}',
-            r'(?:server|storage|network|firewall|gpu)[^\n]{10,150}',
+            r'(?:server|storage|network|firewall|gpu|appliance|enclosure)[^\n]{10,150}',
             r'\d+x\s+[A-Z0-9]+[^\n]{5,100}',  # "2x XYZ123..."
-            r'CPU|SSD|HDD|RAM[^\n]{5,100}',
+            r'\d+\s+[A-Z0-9-]+[^\n]{5,100}',  # "12 S0G11536P24EPP1..."
+            r'[A-Z0-9-]{6,20}\s+\d+\s+[^\n]{10,100}',  # "S0G11536P24EPP1 12 15.36TB..."
+            r'(?:CPU|SSD|HDD|RAM|NVMe|SAS)[^\n]{5,100}',
+            r'\d+\.?\d*\s*(?:TB|GB|MB)\s+[^\n]{5,100}',  # "15.36TB 1 DWPD..."
         ]
         
         for pattern in product_indicators:

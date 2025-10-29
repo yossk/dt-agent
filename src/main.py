@@ -109,23 +109,43 @@ class QuoteProcessor:
             # Process Excel files
             for excel_file in excel_files:
                 try:
+                    if not os.path.exists(excel_file.filepath):
+                        logger.warning(f"Excel file not found, skipping: {excel_file.filepath}")
+                        continue
                     sheets_data = self.excel_parser.parse_excel(excel_file.filepath)
                     products = self.excel_parser.merge_sheets(sheets_data)
-                    sources['excel'] = products
-                    all_products.extend(products)
-                    logger.info(f"Extracted {len(products)} products from {excel_file.filename}")
+                    if products:
+                        sources['excel'] = sources.get('excel', []) + products
+                        all_products.extend(products)
+                        logger.info(f"Extracted {len(products)} products from {excel_file.filename}")
+                    else:
+                        logger.warning(f"No products extracted from {excel_file.filename} - column detection may have failed")
+                except FileNotFoundError:
+                    logger.warning(f"Excel file not found, skipping: {excel_file.filepath}")
+                    continue
                 except Exception as e:
                     logger.error(f"Error processing Excel {excel_file.filename}: {e}")
+                    logger.debug(f"Full error: {e}", exc_info=True)
             
             # Process PDF files
             for pdf_file in pdf_files:
                 try:
+                    if not os.path.exists(pdf_file.filepath):
+                        logger.warning(f"PDF file not found, skipping: {pdf_file.filepath}")
+                        continue
                     products = self.pdf_parser.parse_pdf(pdf_file.filepath)
-                    sources['pdf'] = sources.get('pdf', []) + products
-                    all_products.extend(products)
-                    logger.info(f"Extracted {len(products)} products from {pdf_file.filename}")
+                    if products:
+                        sources['pdf'] = sources.get('pdf', []) + products
+                        all_products.extend(products)
+                        logger.info(f"Extracted {len(products)} products from {pdf_file.filename}")
+                    else:
+                        logger.warning(f"No products extracted from {pdf_file.filename}")
+                except FileNotFoundError:
+                    logger.warning(f"PDF file not found, skipping: {pdf_file.filepath}")
+                    continue
                 except Exception as e:
                     logger.error(f"Error processing PDF {pdf_file.filename}: {e}")
+                    logger.debug(f"Full error: {e}", exc_info=True)
             
             # Process inline tables from email body
             inline_tables = self.email_parser.extract_inline_tables(metadata)
@@ -147,7 +167,35 @@ class QuoteProcessor:
                 for error in validation_errors[:5]:  # Log first 5
                     logger.warning(f"  {error['product']}: {error['errors']}")
             
+            # Save email context even if no products found (for debugging/agent use)
             if not valid_products:
+                logger.warning("No valid products extracted from email, but saving email context")
+                # Still save the email context for review
+                dest_folder = self.file_organizer.build_path(
+                    customer_name if customer_name else "Unknown", 
+                    product_name if product_name else "Unknown"
+                )
+                self.file_organizer.save_email(email_path, dest_folder)
+                extracted_data_no_products = {
+                    "email_metadata": {
+                        "from": metadata.from_address,
+                        "subject": metadata.subject,
+                        "date": metadata.date.isoformat(),
+                        "language": email_context.language
+                    },
+                    "email_context": {
+                        "customer_mentions": email_context.customer_mentions,
+                        "product_descriptions": email_context.product_descriptions,
+                        "special_notes": email_context.special_notes,
+                        "specifications": email_context.specifications,
+                        "quantities_mentioned": email_context.quantities_mentioned,
+                        "structured_context": context_string
+                    },
+                    "products": [],
+                    "validation_errors": validation_errors,
+                    "error": "No valid products extracted from email or attachments"
+                }
+                self.file_organizer.save_extracted_data(extracted_data_no_products, dest_folder)
                 raise ValueError("No valid products extracted from email")
             
             logger.info(f"Valid products: {len(valid_products)}")
