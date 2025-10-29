@@ -85,10 +85,20 @@ class EmailParser:
         attachments = []
         if msg.attachments:
             for att in msg.attachments:
+                # Handle extract-msg Attachment object attributes
+                filename = getattr(att, 'longFilename', None) or getattr(att, 'shortFilename', None) or f"attachment_{len(attachments)}"
+                data = getattr(att, 'data', None)
+                # Check for various possible content_type attributes
+                content_type = (
+                    getattr(att, 'contentType', None) or
+                    getattr(att, 'content_type', None) or
+                    getattr(att, 'mimeType', None) or
+                    "application/octet-stream"
+                )
                 attachments.append({
-                    "filename": att.longFilename or att.shortFilename,
-                    "data": att.data,
-                    "content_type": att.contentType or "application/octet-stream"
+                    "filename": filename,
+                    "data": data,
+                    "content_type": content_type
                 })
         
         # Extract body
