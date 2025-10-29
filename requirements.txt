@@ -22,7 +22,7 @@ beautifulsoup4>=4.12.2
 html5lib>=1.1
 
 # Language/Text Processing
-googletrans==4.0.0rc1
+# googletrans==4.0.0rc1  # Removed: conflicts with httpx
 langdetect>=1.0.9
 chardet>=5.2.0
 
