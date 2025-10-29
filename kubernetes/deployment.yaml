@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dt-agent
+  namespace: dt-agent
+  labels:
+    app: dt-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dt-agent
+  template:
+    metadata:
+      labels:
+        app: dt-agent
+    spec:
+      containers:
+      - name: dt-agent
+        image: dt-agent:latest
+        imagePullPolicy: Always
+        env:
+        - name: CONFIG_PATH
+          value: "/app/config/config.yaml"
+        - name: PYTHONPATH
+          value: "/app"
+        volumeMounts:
+        - name: quotes-storage
+          mountPath: /data/quotes
+        - name: logs
+          mountPath: /data/logs
+        - name: incoming
+          mountPath: /data/incoming
+        - name: config
+          mountPath: /app/config
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: quotes-storage
+        persistentVolumeClaim:
+          claimName: dt-agent-quotes-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: dt-agent-logs-pvc
+      - name: incoming
+        persistentVolumeClaim:
+          claimName: dt-agent-incoming-pvc
+      - name: config
+        configMap:
+          name: dt-agent-config
+

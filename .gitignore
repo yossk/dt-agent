@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Configuration
+config/config.yaml
+*.env
+.env.local
+
+# Data
+/data/
+example-data/temp_attachments/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar
+
+# Temporary files
+*.tmp
+temp_attachments/
+

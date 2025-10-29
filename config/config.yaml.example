@@ -1,0 +1,130 @@
+# DT-Agent Configuration Example
+
+# File path structure for organizing quotes
+paths:
+  base: "/data/quotes"  # Base directory for all quotes
+  structure: "{customer}/{quotes}/{year}/{product}/{costs}"  # Folder structure pattern
+  templates: "./templates"  # Template files location
+
+# Pricing configuration
+pricing:
+  default_margin_percent: 15.0  # Default profit margin percentage
+  margin_rules:
+    - category: "servers"
+      margin: 12.0
+      min_margin_amount: 50.0  # Minimum margin in currency
+      tier_rules:
+        - min_quantity: 10
+          margin_percent: 10.0
+        - min_quantity: 50
+          margin_percent: 8.0
+    
+    - category: "storage"
+      margin: 15.0
+    
+    - category: "networking"
+      margin: 18.0
+      tier_rules:
+        - min_quantity: 5
+          margin_percent: 15.0
+    
+    - category: "software"
+      margin: 25.0
+      min_margin_amount: 100.0
+    
+    - category: "firewalls"
+      margin: 20.0
+    
+    - category: "gpus"
+      margin: 12.0
+    
+    - category: "wifi"
+      margin: 18.0
+
+# Email configuration
+email:
+  imap_server: "outlook.office365.com"
+  imap_port: 993
+  watch_folder: "/data/incoming"  # Watch folder for .msg files
+  response_enabled: true
+  response_template: "templates/email_response.html"
+  response_from: "quotes@dayo-tech.com"
+  
+  # SMTP for sending responses
+  smtp_server: "smtp.office365.com"
+  smtp_port: 587
+  smtp_use_tls: true
+
+# LLM/MCP configuration
+llm:
+  mcp_server_url: "http://mcp-service:8080"  # MCP server endpoint
+  model: "gpt-4"
+  max_retries: 3
+  timeout: 30
+  temperature: 0.1  # Lower temperature for consistent extraction
+  
+  # Product recognition prompts
+  prompts:
+    product_identification: |
+      Identify the product category and extract key features from this description:
+      {description}
+      
+      Return JSON with: category, features, standardized_description
+    sku_mapping: |
+      Map this vendor SKU to our internal SKU system:
+      Vendor SKU: {sku}
+      Product: {description}
+      
+      Return JSON with: internal_sku, match_confidence
+
+# Elasticsearch configuration (for product catalog)
+elasticsearch:
+  enabled: true
+  host: "elasticsearch-service"
+  port: 9200
+  index_name: "products"
+  verify_certs: false  # Set to true for production with proper certificates
+
+# Supported languages
+languages:
+  supported: ["he", "en"]  # Hebrew and English
+  default: "en"
+  auto_detect: true
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "/data/logs/dt-agent.log"
+  max_size_mb: 100
+  backup_count: 10
+
+# Processing options
+processing:
+  # File processing
+  max_file_size_mb: 50
+  allowed_extensions: [".xlsx", ".xls", ".pdf", ".msg"]
+  
+  # OCR settings
+  ocr_enabled: true
+  ocr_languages: ["eng", "heb"]  # Tesseract language codes
+  
+  # Validation
+  strict_validation: false  # If true, fail on validation errors instead of warning
+  auto_correct_quantities: true  # Fix obvious quantity errors
+  
+  # Deduplication
+  auto_deduplicate: true
+  similarity_threshold: 0.85  # For SKU similarity matching
+
+# Kubernetes/Docker settings
+deployment:
+  namespace: "dt-agent"
+  replicas: 2
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+
