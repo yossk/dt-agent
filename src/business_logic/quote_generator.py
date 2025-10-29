@@ -496,16 +496,23 @@ Contact:
     def _create_proposal_sheet(self, wb, products: List[PricedProduct], customer_name: Optional[str], quote_number: Optional[str], currency: str):
         """
         Create proposal sheet (consolidates all products for customer)
-        Format: Product | Description | Qty | Price | Total | Mergin | Profit %
+        Format matches project example.xlsx:
+        - Header at row 3 (Columns B-H)
+        - Teal background (FF008080) with white bold text for headers
+        - Section headers with same formatting
+        - Column A empty (for spacing)
+        - Formulas for totals
         """
         ws = wb.create_sheet(title="proposal")
         
-        # Header at row 3 (as in example)
+        # Header at row 3 (as in example template)
         header_row = 3
         headers = ['Product', 'Description', 'Qty', 'Price', 'Total', 'Mergin', 'Profit %']
         
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        header_font = Font(bold=True, color="FFFFFF", size=11)
+        # Match template formatting: Teal background (FF008080), white bold text
+        header_fill = PatternFill(start_color="008080", end_color="008080", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=12)
+        
         border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
@@ -513,17 +520,36 @@ Contact:
             bottom=Side(style='thin')
         )
         
+        # Column A is empty (for spacing) - start at column B
         for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=header_row, column=col + 1)  # Start at column B (skip first column)
+            cell = ws.cell(row=header_row, column=col + 1)  # Columns B-H
             cell.value = header
             cell.fill = header_fill
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
         
-        # Product rows
+        # Product rows - group by section/category if needed
         row = header_row + 1
+        current_section = None
+        
         for product in products:
+            # Add section header if category changed
+            product_category = product.category or "General"
+            if current_section != product_category:
+                if current_section is not None:
+                    row += 1  # Skip a row between sections
+                
+                # Add section header (bold with teal background)
+                section_cell = ws.cell(row=row, column=2)  # Column B
+                section_cell.value = product_category
+                section_cell.font = Font(bold=True, color="FFFFFF", size=12)
+                section_cell.fill = PatternFill(start_color="008080", end_color="008080", fill_type="solid")
+                section_cell.alignment = Alignment(horizontal='left', vertical='center')
+                row += 1
+                current_section = product_category
+            
+            # Product data row
             values = [
                 product.sku,
                 product.description[:200] if product.description else '',
@@ -535,12 +561,12 @@ Contact:
             ]
             
             for col, value in enumerate(values, 1):
-                cell = ws.cell(row=row, column=col + 1)  # Start at column B
+                cell = ws.cell(row=row, column=col + 1)  # Columns B-H
                 cell.value = value
                 
                 # Format numbers
                 if isinstance(value, (int, float)):
-                    if col in [4, 5, 6]:  # Price/margin columns
+                    if col in [4, 5, 6]:  # Price, Total, Mergin columns
                         cell.number_format = '#,##0.00'
                     elif col == 7:  # Profit %
                         cell.number_format = '0.00%'
@@ -554,6 +580,32 @@ Contact:
                 cell.alignment = Alignment(vertical='top', wrap_text=True) if col == 2 else Alignment(vertical='center')
             
             row += 1
+        
+        # Add Total row (matching template format)
+        total_label_row = row + 1
+        total_label_cell = ws.cell(row=total_label_row, column=2)  # Column B
+        total_label_cell.value = "Project's Total"
+        total_label_cell.font = Font(bold=True, color="FFFFFF", size=12)
+        total_label_cell.fill = PatternFill(start_color="008080", end_color="008080", fill_type="solid")
+        total_label_cell.alignment = Alignment(horizontal='left', vertical='center')
+        
+        # Add SUM formulas for Total and Mergin columns
+        # Total column (F) = SUM of all product totals
+        if row > header_row + 1:
+            first_data_row = header_row + 2
+            last_data_row = row - 1
+            total_formula = f"=SUM(F{first_data_row}:F{last_data_row})"
+            total_cell = ws.cell(row=total_label_row, column=6)  # Column F
+            total_cell.value = total_formula
+            total_cell.number_format = '#,##0.00'
+            total_cell.font = Font(bold=True)
+            
+            # Mergin column (G) = SUM of all margins
+            mergin_formula = f"=SUM(G{first_data_row}:G{last_data_row})"
+            mergin_cell = ws.cell(row=total_label_row, column=7)  # Column G
+            mergin_cell.value = mergin_formula
+            mergin_cell.number_format = '#,##0.00'
+            mergin_cell.font = Font(bold=True)
         
         # Auto-size columns
         for col in range(2, len(headers) + 2):  # Columns B-H
