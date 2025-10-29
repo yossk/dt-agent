@@ -32,6 +32,28 @@ email:
   response_template: "../templates/email_response.html"
   response_from: "test@localhost"
 
+# Email Automation - automatic email watching and processing
+email_automation:
+  enabled: false  # Set to true to enable automatic email processing (requires IMAP credentials)
+  method: "imap"  # Options: "imap", "graph" (Microsoft Graph API)
+  
+  imap:
+    server: "imap.gmail.com"  # IMAP server (Gmail example)
+    port: 993  # IMAP SSL port
+    username: "test@example.com"  # Your email account
+    password: "${EMAIL_PASSWORD}"  # Set environment variable: export EMAIL_PASSWORD="your-password"
+    folder: "INBOX"
+    processed_folder: "Processed"
+    check_interval_seconds: 30  # Check every 30 seconds
+  
+  filters:
+    from_domains: []  # Empty = accept from any domain (for testing)
+    subject_keywords:  # Keywords in subject
+      - "quote"
+      - "price"
+      - "quotation"
+    has_attachments: true  # Only process emails with attachments
+
 # LLM/MCP configuration (optional for local testing)
 llm:
   mcp_server_url: "http://localhost:8080"  # Local MCP server if running
